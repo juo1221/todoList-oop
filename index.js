@@ -1,11 +1,122 @@
 const err = (v) => {
   throw v;
 };
-const el = (tag) => {
-  return document.createElement(tag);
+const el = (t) => {
+  return document.createElement(t);
 };
 
-class Renderer {
+const Task = class {
+  static load(json) {
+    const task = new Task(json.title, json.isCompleted);
+    return task;
+  }
+  static get(title) {
+    return new Task(title);
+  }
+  toJSON() {
+    return this.getInfo();
+  }
+  constructor(title, isCompleted = false) {
+    (this.title = title), (this.isCompleted = isCompleted);
+  }
+  setTitle(title) {
+    this.title = title;
+  }
+  toggle() {
+    this.isCompleted = !this.isCompleted;
+  }
+  getInfo() {
+    return { title: this.title, isCompleted: this.isCompleted };
+  }
+};
+
+const Folder = class extends Set {
+  static get(title) {
+    return new Folder(title);
+  }
+  static load(json) {
+    const folder = new Folder(json.title);
+    json.tasks.forEach((t) => {
+      folder.addTask(Task.load(t));
+    });
+    return folder;
+  }
+  toJSON() {
+    return { title: this.getTitle(), tasks: this.getTasks() };
+  }
+  constructor(title) {
+    super();
+    this.title = title;
+  }
+  moveTask(t, folderSrc) {
+    if (super.has(t) || !folderSrc.has(t)) err("...1");
+    folderSrc.removeTask(t);
+    this.addTask(t);
+  }
+  addTask(task) {
+    super.add(task);
+  }
+  removeTask(task) {
+    super.delete(task);
+  }
+  getTasks() {
+    return [...super.values()];
+  }
+  getTitle() {
+    return this.title;
+  }
+  add() {
+    arr("...");
+  }
+  delete() {
+    arr("...");
+  }
+  values() {
+    arr("...");
+  }
+  clear() {
+    arr("...");
+  }
+};
+
+const App = class extends Set {
+  toJSON() {
+    return this.getFolders();
+  }
+  static load(json) {
+    const app = new App();
+    json.forEach((f) => {
+      app.addFolder(Folder.load(f));
+    });
+    return app;
+  }
+  constructor() {
+    super();
+  }
+  addFolder(folder) {
+    super.add(folder);
+  }
+  removeFolder(folder) {
+    super.delete(folder);
+  }
+  getFolders() {
+    return [...super.values()];
+  }
+  add() {
+    arr("...");
+  }
+  delete() {
+    arr("...");
+  }
+  values() {
+    arr("...");
+  }
+  clear() {
+    arr("...");
+  }
+};
+
+const Renderer = class {
   constructor(app) {
     this.app = app;
   }
@@ -13,57 +124,44 @@ class Renderer {
     this._render();
   }
   _render() {
-    err("must be overrided");
+    err("must be overrided!");
   }
-}
+};
 
-class DOMRenderer extends Renderer {
+const DOMRenderer = class extends Renderer {
   constructor(parent, app) {
     super(app);
-    this.el = parent.appendChild(el("section"));
-    this.el.innerHTML = `
-        <nav>
-          <header>
-            <h2>folders</header>
-            <input type="text" />
-          </header>
-          <ul></ul>
-        </nav>
-        <section>
-          <header>
-            <h2>tasks</h2>
-            <input type="text">
-          </header>
-          <ul></ul>
-        </section>
-      `;
+    const [folder, task] = Array.from(parent.querySelectorAll("ul"));
+    const [load, save] = Array.from(parent.querySelectorAll("button"));
+    load.onclick = () => {
+      const v = localStorage["todo"];
+      if (v) {
+        this.app = App.load(JSON.parse(v));
+        this.render();
+      }
+    };
+    save.onclick = () => {
+      localStorage["todo"] = JSON.stringify(this.app);
+    };
 
-    this.el.querySelector("nav").style.cssText =
-      "float:left; width:200px; border-right:1px solid #000";
-
-    this.el.querySelector("section").style.cssText =
-      "float:left; margin-left: 50px; width:200px;";
-
-    const ul = this.el.querySelectorAll("ul");
-    const input = this.el.querySelectorAll("input");
-
-    this.folders = ul[0];
-    this.tasks = ul[1];
+    this.taskEl = [];
+    this.folder = folder;
+    this.task = task;
     this.currentFolder = null;
 
-    input[0].addEventListener("keyup", (e) => {
-      const title = e.target.value.trim();
-      if (e.keyCode != 13 || !title) return;
-      const folder = new Folder(title);
+    parent.querySelector(".folder-input").addEventListener("keyup", (e) => {
+      const v = e.target.value.trim();
+      if (e.keyCode != 13 || !v) return;
+      const folder = Folder.get(v);
       this.app.addFolder(folder);
       e.target.value = "";
       e.target.focus();
       this.render();
     });
-    input[1].addEventListener("keyup", (e) => {
-      const title = e.target.value.trim();
-      if (e.keyCode != 13 || !title || !this.currentFolder) return;
-      const task = new Task(title);
+    parent.querySelector(".task-input").addEventListener("keyup", (e) => {
+      const v = e.target.value.trim();
+      if (e.keyCode != 13 || !v || !this.currentFolder) return;
+      const task = Task.get(v);
       this.currentFolder.addTask(task);
       e.target.value = "";
       e.target.focus();
@@ -72,34 +170,82 @@ class DOMRenderer extends Renderer {
   }
   _render() {
     const folders = this.app.getFolders();
+    let moveTask;
     if (!this.currentFolder) this.currentFolder = folders[0];
-    this.folders.innerHTML = "";
-    folders.forEach((folder) => {
-      const li = el("li");
-      li.innerHTML = folder.getTitle();
+    let oldEl = this.folder.firstElementChild;
+    let lastEl = null;
+    let tasks;
+    folders.forEach((f) => {
+      let li;
+      if (oldEl) {
+        li = oldEl;
+        oldEl = oldEl.nextElementSibling;
+      } else {
+        li = el("li");
+        this.folder.appendChild(li);
+        oldEl = null;
+      }
+      lastEl = li;
+      li.innerHTML = f.getTitle();
       li.style.cssText =
-        "font-size:" + (this.currentFolder == folder ? "20px" : "12px");
-      li.addEventListener("click", () => {
-        this.currentFolder = folder;
+        "font-size:" + (this.currentFolder == f ? "32px" : "20px");
+      li.onclick = () => {
+        this.currentFolder = f;
         this.render();
-      });
-      this.folders.appendChild(li);
-    });
-    if (!this.currentFolder) return;
-    this.tasks.innerHTML = "";
-    this.currentFolder.getTasks().forEach((task) => {
-      const li = el("li");
-      const { title, isCompleted } = task.getInfo();
-      li.innerHTML = isCompleted
-        ? `<p style="text-decoration:line-through">${title}</p>`
-        : `<p>${title}</p>`;
-      li.addEventListener("click", () => {
-        task.toggle();
+      };
+      li.ondrop = (e) => {
+        e.preventDefault();
+        f.moveTask(moveTask, this.currentFolder);
         this.render();
-      });
-      this.tasks.appendChild(li);
+      };
+      li.ondragover = (e) => {
+        e.preventDefault();
+      };
     });
-  }
-}
+    if (lastEl)
+      while ((oldEl = lastEl.nextElementSibling)) {
+        this.folder.removeChild(oldEl);
+      }
 
-new DOMRenderer(document.body, new App());
+    if (!this.currentFolder) return;
+    tasks = this.currentFolder.getTasks();
+    if (tasks.length == 0) {
+      while ((oldEl = this.task.firstElementChild)) {
+        this.task.removeChild(oldEl);
+        this.taskEl.push(oldEl);
+      }
+    } else {
+      oldEl = this.task.firstElementChild;
+      lastEl = null;
+      tasks.forEach((t) => {
+        let li;
+        if (oldEl) {
+          li = oldEl;
+          oldEl = oldEl.nextElementSibling;
+        } else {
+          li = this.taskEl.length ? this.taskEl.pop() : el("li");
+          oldEl = null;
+          this.task.appendChild(li);
+        }
+        lastEl = li;
+        li.setAttribute("draggable", true);
+        const { title, isCompleted } = t.getInfo();
+        li.innerHTML = isCompleted ? "completed " : "process " + title;
+        li.onclick = () => {
+          t.toggle();
+          this.render();
+        };
+        li.ondragstart = () => {
+          moveTask = t;
+        };
+      });
+      if (lastEl)
+        while ((oldEl = lastEl.nextElementSibling)) {
+          this.task.removeChild(oldEl);
+          this.taskEl.push(oldEl);
+        }
+    }
+  }
+};
+
+new DOMRenderer(document.querySelector("main"), new App());

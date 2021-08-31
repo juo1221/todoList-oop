@@ -6,5 +6,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
   </head>
-  <body></body>
+  <body>
+    <style>
+      main .folder {
+        float: left;
+        width: 200px;
+        border-right: 1px solid #000;
+      }
+      main .task {
+        float: left;
+        margin-left: 50px;
+        width: 200px;
+      }
+    </style>
+    <main>
+      <nav>
+        <button class="load">load</button>
+        <button class="save">save</button>
+      </nav>
+      <nav class="folder">
+        <header>
+          <input class="folder-input" type="text" />
+        </header>
+        <ul></ul>
+      </nav>
+      <section class="task">
+        <header>
+          <input class="task-input" type="text" />
+        </header>
+        <ul></ul>
+      </section>
+    </main>
+
+    <script src="index.js"></script>
+  </body>
 </html>
